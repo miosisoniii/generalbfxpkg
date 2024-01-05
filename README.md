@@ -3,6 +3,9 @@ generalbfxpkg v0.0.0
 Artemio Sison III
 2024-01-03
 
+# NOTE ⚠️
+All data in this package is randomized, and the package is non-executable as sensitive files were removed.
+
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
 # bfxpkg
