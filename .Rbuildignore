@@ -1,0 +1,13 @@
+^renv$
+^renv\.lock$
+^bfxpkg\.Rproj$
+^\.Rproj\.user$
+^CITATION\.cff$
+^README\.Rmd$
+^data-raw$
+^\.github$
+^doc$
+^Meta$
+^_pkgdown\.yml$
+^docs$
+^pkgdown$

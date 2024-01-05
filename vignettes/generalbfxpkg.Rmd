@@ -1,0 +1,529 @@
+---
+title: "generalbfxpkg"
+author: "Mio Sison III"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{generalbfxpkg}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+# devtools::install_github("miosisoniii/generalbfxpkg")
+library(generalbfxpkg)
+library(dplyr)
+library(tidyr)
+
+## load packages that are needed for Flow Cytometry operations
+# library(flowWorkspace)
+# library(CytoML)
+```
+
+# Vignette: bfpkg
+The difference between the README.Rmd and the `vignettes/generalbfxpkg.Rmd` is that the **vignette is the 'long-form' guide to the packge. In this vignette I will be covering the many use-cases for the various functions in `generalbfxpkg`.
+
+## Function Use Cases
+
+### General Functions
+There are few scripts that can be considered for 'general' use. Functions that can be used at any time irrespective of assay or workflow.
+
+#### load_sp
+This function points to the `Development` and `Production`.
+```{r load_sp()}
+## arg = "dev"
+load_sp(type = "dev")
+
+## arg = "prod"
+load_sp(type = "prod")
+```
+
+Here's how you can use `load_sp()` to get to FLOW data. To get to the data, be like Dillon Francis aka ['DJ Hanzel'](https://open.spotify.com/artist/6nxYdBHCGZ8bBM7sGhqxSC) and *Go von deeper*. Be sure to check out the BFX **SharePoint** to find out exactly the paths that y
+```{r load_sp() use case}
+## store the path as a character string object
+dev_sp_path <- load_sp(type = "dev")
+
+## paste together the paths
+path_to_file <- paste0(dev_sp_path, "/data/path/to/analyst.wsp")
+```
+
+
+### Visits
+
+#### visit_test
+This function is used to access any of the example data column names found in `/data`. This is so we don't need to write out the column names in a call to `dplyr::select()`, though it is more useful in the Development environment because the column names specified in this function only work on the data in `/data`.
+
+```{r visit_test()}
+# Returns all visits for the HPV study
+visit_test(v.study = "proj01")
+
+## NOT RUN - use this in the proj01 data in the package to reorder the columns with a call to dplyr::select()
+# proj01data %>%
+#   select(visit_test(v.study = "proj01"))
+```
+#### recode_visits
+The purpose of this function is to recode any misnamed VISITs. This is tested on all of the test data in the package, as long as they are normal and *not* like the FLOW01 data, where a VISIT is named `W12PBD`. Should work on most normal VISITs **EXCEPT** VISIT values such as `Unscheduled` or `Re-Screen`. This function converts *normal-named* VISITs such as `Day 0` to `D0` or `Week12` to `W12`.
+
+> Please remember to use this with a call to `dplyr::rowwise()` if using in the context of a dataframe.
+
+```{r recode_visits()}
+## can be used on a single string
+ex1 <- "1235125_WEEK 6_HPV11.fcs"
+
+# using on a single string, returns: "Week6"
+recode_visits(v.string = ex1, output.format = "full")
+
+# using on a single string, returns: "WK6" (preferred)
+recode_visits(v.string = ex1, output.format = "abbr")
+
+
+## if using a dataframe, must be used with dplyr::mutate() and dplyr::rowwise() 
+ex_df <- data.frame(SID = paste0("0000-000", seq_along(1:4)),
+                    VISIT = c("Week 1", "Week1", "Week2", "Week_2"),
+                    STIM = paste0("STIM", seq_along(1:2))) %>%
+  mutate(FILENAME = paste(SID, VISIT, STIM, sep = "_")) %>%
+  relocate(FILENAME, .before = SID)
+
+# use within a mutate for filename column
+ex_df %>% rowwise() %>% mutate(FILENAME = recode_visits(FILENAME, "abbr"))
+
+# use within a mutate for VISIT column, must use dplyr::rowwise()
+ex_df %>% rowwise() %>% mutate(VISIT = recode_visits(VISIT, "full"))
+
+```
+
+
+### Validate 
+These functions are used to check then input dataframe to make sure it is indeed a dataframe, while other `validate()` functions are used to check the **argument input** for functions in the package. If the argument supplied is correct, no error will be returned. Very useful for writing functions in `generalbfxpkg`
+
+#### validate_input_df
+```{r validate_input_df()}
+df <- data.frame('VISIT' = c('Scheduled', 'Unscheduled', 'Screening'),
+                 'Other' = c(1, 2, 3))
+validate_input_df(df)
+```
+
+#### validate_input_cols
+```{r validate_input_cols()}
+validate_input_cols(iris, c("Sepal.Length", "Sepal.Width", "Petal.Length", "Petal.Width"))
+```
+
+
+#### validate_uncommon_visits
+This function detects *errant* VISIT names, such as 'Scheduled', 'Unscheduled', 'Screening', or 'Re-screen' and stops the function if the function detects any of these in the 
+```{r validate_uncommon_visits()}
+df <- data.frame('VISIT' = c('scheduled', 'unscheduled', 'screening'),
+                 'Other' = c(1, 2, 3))
+
+## not run, this data above intentionally produces an error.
+# validate_uncommon_visits(.data = df,
+#                          visit.col = "VISIT",
+#                          err.visits = "Unschefduled")
+```
+
+
+### Wrangle
+
+#### get_generalbfxpkg_data_names
+This function can be used to get the names of example data. This is important because instead of diving into the documentation, you can just run (in the console) `get_generalbfxpkg_data_names()` to list all of the available example data. You can then take a look at the data to see how the function works. The data was created using these data stored in `/data`. You can save the name of the object as whatever you'd like if you want to use it to continue developing code for `generalbfxpkg`.
+
+> Important to note that this needs to be updated as we continue to add example data to the package.
+
+```{r get_generalbfxpkg_data_names()}
+## list the names
+get_generalbfxpkg_data_names()
+
+## load the data (from the package)
+head(visit_recoding)
+```
+
+#### get_dat
+Not completely necessary since you can load the data directly into the Renviron by name, but you can also call `get_dat()` to obtain the data and store it as an object.
+```{r get_dat()}
+visit_data <- get_dat(data.name = "visit_recoding")
+visit_data %>% head(n = 10)
+
+```
+
+
+#### add.drop_sid_hyphen
+Often times we may have a "-" in the SID or are missing an SID. You can use `add.drop_sid_hyphen()` in a call to `dplyr::mutate()` and a call to `dplyr::rowwise()` to apply this to the entire `SID` column. **Ensure to use `dplyr::rowwise()`!
+
+```{r add.drop_sid_hyphen()}
+sid1 <- "0101-0101"
+sid2 <- "ROUS00000000"
+
+## drop hyphen in an SID 
+add.drop_sid_hyphen(sid1, add.drop = "drop")
+
+## add hyphen to an 8 digit SID
+add.drop_sid_hyphen(sid2, add.drop = "add")
+
+## using this in a DM
+ex_df <- data.frame(SID = paste0("0000-000", seq_along(1:9)))
+ex_df %>%
+  rowwise() %>% 
+  mutate(SID = add.drop_sid_hyphen(sid.string = SID, add.drop = "drop")) 
+```
+#### get_date
+Use `get_date()` to get the date format that we *regularly* use at the end of a filename. Ex. `PROJ01_ELISPOT_LONG_MS3_01Jan24.csv`. 
+
+```{r get_date()}
+get_date()
+```
+
+#### get_initials
+You can use this to automatically store your initials in a filename.
+```{r get_initials()}
+get_initials()
+```
+
+You can also paste them together to make it easier to write the filename:
+```{r write to csv example}
+## store initials as a character string
+initials <- get_initials()
+
+## store date as a character string
+date <- get_date()
+
+## paste final filename together
+filename <- paste0("ASSAY_STUDY_", initials, "_", date, ".csv")
+filename
+
+## not run
+# write.csv(data_to_write, file = filename)
+```
+
+
+### Anonymize
+
+#### anonymize_sid
+If you just need to anonymize the SID **(when working in generalbfxpkg or a Development environment)**, use `anonymize_sid()` **without** a call to `dplyr::mutate()`. Useful if we need to put data online (in GitHub)
+```{r anonymize_sid()}
+flow_param_data %>% head() %>% anonymize_sid()
+```
+
+#### anonymize_meta
+Working in generalbfxpkg or Development Environment, use this to anonymize any other column.
+```{r anonymize_meta()}
+## create dataframe
+ex_df <- data.frame(SID = paste0("SID", sample(10002000:3000000, 6)),
+                    VISIT = paste0("WEEK", sample(1:10, 6)), STIM = paste0("HPV", sample(1:3, 3)),
+                    PARAM = paste0("CD", sample(1:25, 3)), MIRNA = paste0("hsa.mir", sample(1:25, 3)))
+
+## type = "SID"
+ex_df %>% mutate(SID = anonymize_meta(col.meta = .data$SID, type = "SID"))
+
+## type = "VISIT"
+ex_df %>% mutate(VISIT = anonymize_meta(col.meta = .data$VISIT, type = "VISIT"))
+
+```
+
+## ELISPOT
+These functions can also be used for general VMD creation.
+
+#### sum_across_wide
+Function used to create `SUM_TOTAL`. Typically used for adding up **NON**-positive/negative controls (think HPV16E6 + HPV16E7 + HPV18E6 + HPV18E7 = TOTAL_HPV). Data must be in **WIDE** format. (STIMs are in the colum header). Ensure to list colums you would like to `sum()` together by storing them in a vector like so: `hpv16cols <- c("HPV16E6", "HPV16E7")`
+
+> This function has a call to the `dplyr::rowwise()` function. Note that this may take some time because calculations are performed row by row.
+
+```{r sum_across_wide()}
+## load elispot DM
+elispot_long <- elispot01_data %>% head(n = 50)
+
+## pivot wider to get STIM values in the header
+elispot_wide <- elispot_long %>% 
+  pivot_wider(names_from = "STIM", values_from = "RESULT")
+
+## store target STIM values in a vector
+hpv16cols <-  c("HPV16E6", "HPV16E7")
+hpv18cols <- c("HPV18E6", "HPV18E7")
+
+## use sum_across_wide
+elispot_wide <- elispot_wide %>%
+  sum_across_wide(sum.cols = hpv16cols, 
+                  output.col = "SUM_HPV16", 
+                  na.rm = TRUE) %>%
+  select(-STUDY, -ASSAY)
+
+## show the output
+elispot_wide
+```
+
+#### get_baseline
+Calculate BASELINE values for the VMD. This function uses regex to detect variation of typical BASELINE values such as `Day0 and Screen`. Edit the regex in the function arguments to make sure that all variations of BASELINE values (D0, Day 0, Day0, ... etc.) are detected and used for the selection of the BASELINE value. Commonly used for VMD calculations.
+
+> Note that the data must be in WIDE format, with VISIT values in the column header! AND also consider that you may need to change UNSCHEDULED or strangely named VISIT values based on what is needed by end users. If there are no SCR or D0 columns available, there will be an error thrown.
+
+```{r get_baseline()}
+## load the data
+elispot_long <- elispot01_data  %>%
+  ## drop unneeded values for UNSCHEDULED
+  filter(VISIT != "Unscheduled") %>%
+  filter(!is.na(RESULT)) 
+
+## pivot wider so that VISIT values are in the column header
+elispot_wide <- elispot_long %>%
+  pivot_wider(names_from = "VISIT",
+              values_from = "RESULT")
+
+## determine BASELINE with the function.
+elispot_base <- elispot_wide %>%
+  get_baseline(df = ., 
+               d0.regex = "d.*0",
+               scr.regex = "scr.*|re*scr.*") %>%
+  head(n = 10) %>%
+  select(-STUDY, -ASSAY)
+
+## show the new output
+elispot_base
+
+```
+
+#### delta_calc
+This function calculates the *delta* change from BASELINE to the non-BASELINE column. Often used in VMD generation. The arg `regex` can be added to so that if there are other non-BASELINE columns (like `PBD` or `EOT`, etc.) 
+```{r delta_calc()}
+elispot_base %>% 
+  select(-EVALUABLE) %>% ## dropping STUDY/ASSAY columns so it's easier to see the output
+  delta_calc(regex = "WEEK|WK|Week ")
+```
+
+
+
+#### get_recode_vector
+Get unique values for a VISIT/STIM column, and replace them with an arbitrary value (ex. `Day0` becomes `VISIT1`). `get_recode_vector()` is used in `recode_col_to_base()` and `recode_col_to_orig()`. 
+
+> These functions are not restricted to ELISPOT, but can be used in most if not all data, but especially for DM or VMD format data.
+
+```{r get_recode_vector()}
+## load elispot data
+elispot_dm <- proj01_elispot_data
+
+### get_recode_vector
+## for VISIT (day0 -> VISIT1)
+recode_vector <- get_recode_vector(elispot_dm, "VISIT")
+recode_vector
+
+## for STIM (HPV16E6 -> STIM1)
+recode_vector <- get_recode_vector(elispot_dm,  "STIM")
+recode_vector
+
+## ust showing the structure of the data
+str(recode_vector)
+
+```
+
+Here is the function in action. `to_base` means converting to the 'generic' format (STIM1... or VISIT1...)
+```{r recode_col_to_base()}
+## recode_col_to_base 
+original_df <- elispot_dm |> head()
+converted_df <- recode_col_to_base(original_df, "STIM")
+converted_df
+
+```
+
+And here we can return STIM back to the original df:
+```{r recode_col_to_orig}
+back_to_original <- recode_col_to_orig(converted.df = converted_df, 
+                                       orig.df = original_df, 
+                                       df.var = "STIM")
+back_to_original
+```
+
+
+## VMD Stats
+
+#### shap_w
+The `shap_w()` function applies the 'Shapiro-Wilks' test from the `stats()` package.
+```{r shap_w()}
+data <- proj01_algl_dm_to_vmd_data |> head(n = 250)
+shap_w(df = data, result.colname = "SUM_FREQ")
+```
+
+#### wilcox_test_grouped
+Running `wilcox_test_grouped()` runs the Wilcoxon Exact test on a **grouped** data frame. You can use the `group1` and `group2` arguments to specify which STIM's you would like to compare, within each VISIT, and for each PARAM.
+
+```{r wilcox_test_grouped()}
+data <- data.frame(RESULT = c(rnorm(50), rnorm(50, mean = 3)),
+                   STIM = rep(c('group1', 'group2'), each = 50),
+                   PARAM = rep(c('A', 'B'), each = 25, times = 2),
+                   VISIT = rep(1:2, each = 25, times = 2))
+
+wilcox_test_grouped(data, 
+                    subset.cols = c("VISIT", "PARAM"),
+                    grouping.factor = "STIM",
+                    group1 = "group1",
+                    group2 = "group2",
+                    paired = FALSE,
+                    exact = TRUE)
+```
+
+
+## Flow Cytometry
+
+### Flow Pre-QC
+These functions pertain to the **Pre-QC** stage of the Flow Cytometry data processing workflow. 
+
+#### import_flow_freq 
+This function is used to import flow cytometry cell population frequencies from a `.wsp` file. This can be used in a loop to produce `data.frame list` object. This can then be `base::rowbind()` or `dplyr::bind_rows` to create a single dataframe. Don't forget to store your data in Sharepoint! Then use `generalbfxpkg::load_sp()` to get the path. 
+```{r import_flow_freq()}
+## arbitrary path to the workspace - NOT RUN
+# output <- import_flow_freq("path/to/your/workspace.wsp")
+
+```
+
+Here is how to use this in a loop to create a dataframe from all of the exported flow frequencies. Please remember to use `full.names = TRUE` in the call to `base::list.files()`.
+
+> If there happen to be batches that you are binding together, it is VERY useful (especially for Reconciliation) to `dplyr::mutate` a BATCH column.
+
+```{r import_flow_freq() loop example}
+## get a character vector of the filepaths
+# wsp_list <- list.files("path/to/sharepoint/folder", pattern = "*.wsp", full.names = TRUE)
+
+## create empty vector to store output from the for loop
+# df_list <- c()
+
+## for loop using function
+# for (i in 1:length(wsp_list)) {
+#   df_list[[i]] <- import_flow_freq(wsp_list[i]) %>%
+#     mutate(BATCH = "B1")
+# }
+
+## bind together to create 
+# wsp_output <- dplyr::bind_rows(df_list)
+```
+
+#### convert_freq_pct
+The output from FlowJo for Cell Population frequencies comes out as a *proportion* in **decimal** format. This function converts it into a **percent** by multiply `x * 100`. Immunology prefers the percentage here.
+```{r convert_freq_pct()}
+convert_freq_pct(c(0.213, 0.45235, 0.233, 0.11))
+```
+#### format_long_freq
+This function takes your export from `import_flow_freq` and converts the data to a *percentage*, and stores in a long format. The `meta.split` argument takes into account whether or not you have already split the dataframe's metadata (filename) into `SID`, `VISIT`, `STIM`. 
+
+> IF you did **NOT** split the data into these columns (if the column is an **fcs filename**), then use `meta.split = FALSE`.
+
+The example below DOES have the data split into `SID`, `STIM`, and `VISIT` columns. Thus, the arg specified should be `meta.split = TRUE`. The function splits the .fcs `filename` into `SID`, `VISIT`, `STIM` columns.
+
+```{r format_long_freq()}
+## data with SID, VISIT, STIM
+algl_data <- flow01_count_data %>% head(n = 100)
+
+## execute the function
+algl_long <- algl_data %>% format_long_freq(df.wsp.export = ., meta.split = TRUE)
+
+## show the output from the function
+algl_long %>% head(n = 10)
+```
+
+
+#### flow_preqc_wrap
+This is a wrapper function that combines the all of the previous flow pre-qc functions, allowing you to specify a path to the directory containing your data. Since this directly works with your exports from FlowJo, the `filename` column will need to be split into SID, VISIT, STIM using the arg `meta.split = FALSE`. It also binds them together after running the for loop.
+
+> This is often used for a **SINGLE** analyst directory. So you will need to run this again for the second analyst.
+
+```{r flow_preqc_wrap}
+## specify the path to the folder - NOT RUN
+# data <- flow_preqc_wrap("path/to/wsp/folder", meta.split = FALSE)
+```
+
+#### flow_qc_compare
+This function compares thje output from the two analyst FlowJo exports and calculates the `Coefficient of Variation` (CV), and also marks them as `PASS/FAIL` depending on if the CV > 20.0 (FAIL) or CV < 20 (PASS)
+```{r flow_qc_compare}
+## create arbitrary data to show use of the function
+analyst1_data <- data.frame(name = c("Sample1", "Sample2"),
+                            PARAM = c("CD4", "CD8"),
+                            Frequency = c(55.0, 30.0))
+analyst2_data <- data.frame(name = c("Sample1", "Sample2"),
+                            PARAM = c("CD4", "CD8"),
+                            Frequency = c(54.5, 29.5))
+
+## show the data
+flow_qc_compare(analyst1_data, analyst2_data)
+```
+
+
+
+## Flow (QC Meeting File Generation)
+There are a few functions in this R script, but you will only need to worry about the one wrapper function. The others `index_cv_fail`, `import_cv_xl`, `color_cv_xl` are internal and used by `write_cv_xl()`.
+
+#### write_cv_xl
+This creates an excel workbook in the directory of your choosing, highlighting any of the data that did not PASS (CV > 20.0) between the two analyst data for quality control.
+```{r write_cv_xl()}
+## create excel QC data from the intermediate data format (IDF) - NOT RUN
+# write_cv_xl(data, output.dir = paste0(load_sp(), "data"))
+
+```
+
+
+## Flow (Post-QC)
+These functions are used in the Flow Cytometry Post-QC Workflow
+
+#### gen_flow_params
+This function extracts flow Parameters (Cell Populations) from an exported wsp dataframe. This has not been tested completely yet, but it may be useful for creating custom PARAM combinations by supplying a smaller character vector. This vector can be concatenated to the full PARAM list and then supplied to the `gen_flow_combos` fn. 
+
+> This is the essentially what makes up `andMarkersList.csv` that we commonly use for calculation of frequencies for combinations of different cell population PARAMs.
+
+```{r get_flow_params()}
+all_params <- flow01_count_data %>% get_flow_params()
+all_params
+
+## using a smaller list and adding to the all_params vector for a custom (NOT FULLY TESTED)
+custom_params <- c("CCR7", "OX40", "CD137")
+combined_params <- c(all_params, custom_params) %>% unique()
+combined_params
+```
+
+#### get_flow_combos
+This extracts all of the PARAMS for *both* CD4/CD8. The output is in a vector so that it can be used in other functions or workflows such as the `gen_flow_combos()` function.
+```{r gen_flow_combos()}
+## using custom param list so the run-time is shorter 
+gen_flow_combos(custom_params)
+```
+
+Creating custom PARAMs and appending to the normal PARAMs
+```{r}
+custom_combos <- gen_flow_combos(custom_params)
+custom_combos
+
+## not run
+# normal_combos <- gen_flow_combos(all_params)
+# all_combos <- dplyr::bind_rows(custom_combos, normal_combos)
+# all_combos %>% head()
+```
+
+
+
+### Flow (Extract Cell Counts)
+The following functions are included in the package but must be used with caution as the functions were built on R `4.1.3` while the rest of the package was built on R `4.2.2`. Functions were not created with data from `/data` and do not have supporting tests. UNDER CONSTRUCTION!
+
+
+#### get_flow_gating_args
+Depending on the assay, and whether the population is CD4 or CD8, the function returns a list of gating arguments to be passed to the `openCyto::gs_add_gating_method()` function.
+```{r get_flow_gating_args()}
+
+```
+
+#### flow_polyf_extract
+Extract Flow data from workspace files
+```{r extract_postqc_polyf()}
+
+```
+
+#### extract_cell_counts_flow
+This function uses the PolyF extract data from `flow_polyF_extract()` function.
+```{r extract_postqc_counts()}
+
+```
+
+#### flow_final_parse_to_dm
+This parses the exports so that they can be coerced into a DM, based on the arguments supplied to the data.
+```{r parse_to_dm_postqc_flow}
+
+```
